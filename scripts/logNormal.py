@@ -11,16 +11,17 @@ class LogNormal():
     def __init__(self, simbolo = "BBVA.MC", p=30):
         self.acciones = yf.Ticker(simbolo).history(period="max")
         self.datos = self.acciones.iloc[len(self.acciones)-p:][["Open","High","Low","Close"]]
-        self.em = estimacionMomentos()
-        self.emv = estimacionMV()
-        self.emnp = estimacionMNP()
-        self.error = tableE()
+        self.datos.index = range(0,len(self.datos))
+        self.em = self.estimacionMomentos()
+        self.emv = self.estimacionMV()
+        self.emnp = self.estimacionMNP()
+        self.error = self.tableE()
         self.p25 = None
         self.muP = None
         self.p975 = None
         self.sigmaP  = None
 
-    def media(mu,datos = self.datos,t = None):
+    def media(self,mu,t = None):
         """
         La siguiente función nos devuelve el media del modelo Log-Normal en el instate t:
         Input:
@@ -33,16 +34,16 @@ class LogNormal():
         from math import exp
         import pandas as pd 
 
-        s0 = datos.iloc[0]
-        eS = pd.DataFrame(columns=datos.iloc[0].index)
-        if t:
+        s0 = self.datos.iloc[0]
+        eS = pd.DataFrame(columns=self.datos.iloc[0].index)
+        if t is not None:
             eS = eS.append(pd.DataFrame(s0*list(map(exp,mu*t))).transpose(),ignore_index=True)
         else:
-            for t in range(len(datos)):
+            for t in range(len(self.datos)):
                 eS = eS.append(pd.DataFrame(s0*list(map(exp,mu*t))).transpose(),ignore_index=True)
         return(eS)
 
-    def desvTipica(mu, sigma,datos = self.datos, t = None):
+    def desvTipica(self,mu, sigma, t = None):
         """
         La siguiente función nos devuelve la desviación típica del modelo Log-Normal en el instate t:
         Input:
@@ -57,16 +58,16 @@ class LogNormal():
         import numpy as np 
         import pandas as pd 
 
-        s0 = datos.iloc[0]
-        eS = pd.DataFrame(columns=datos.iloc[0].index)
-        if t:
-            eS = eS.append(pd.DataFrame(list(map(sqrt,(s0**2)*list(map(exp,2*mu*t))*list(map(lambda x : exp(x) - 1, (sigma**2)*t)))),index = datos.columns).transpose(),ignore_index=True)
+        s0 = self.datos.iloc[0]
+        eS = pd.DataFrame(columns=self.datos.iloc[0].index)
+        if t is not None:
+            eS = eS.append(pd.DataFrame(list(map(sqrt,(s0**2)*list(map(exp,2*mu*t))*list(map(lambda x : exp(x) - 1, (sigma**2)*t)))),index = self.datos.columns).transpose(),ignore_index=True)
         else:
-            for t in range(len(datos)):
-                eS = eS.append(pd.DataFrame(list(map(sqrt,(s0**2)*list(map(exp,2*mu*t))*list(map(lambda x : exp(x) - 1, (sigma**2)*t)))),index = datos.columns).transpose(),ignore_index=True)
+            for t in range(len(self.datos)):
+                eS = eS.append(pd.DataFrame(list(map(sqrt,(s0**2)*list(map(exp,2*mu*t))*list(map(lambda x : exp(x) - 1, (sigma**2)*t)))),index = self.datos.columns).transpose(),ignore_index=True)
         return(eS)
 
-    def estimacionMomentos(datos = self.datos):
+    def estimacionMomentos(self):
         """
         La siguiente función nos devuelve mu y sigma obtenidos por el método de los momentos,
         Este método se basa en calcular la media y varianza muestral de la diferencia de logaritmos de nuestros datos, es decir,
@@ -76,22 +77,14 @@ class LogNormal():
         Output:
             - Dict[Number]          : Diccionario con los datos de la media y la desviación típica que nos da el método.
         """
-        try:
-            dt = (datos.index[1] - datos.index[0]).days
-            u = np.log(datos).diff()
-            uM = u.mean()
-            uV = u.std()**2
-            
-            return( {"m" : ((uM + uV/2)/dt).to_dict() , "s" : (np.sqrt(uV/dt)).to_dict() }   )
-        except:
-            dt = 1
-            u = np.log(datos).diff()
-            uM = u.mean()
-            uV = u.std()**2
-            
-            return( {"m" : ((uM + uV/2)/dt).to_dict() , "s" : (np.sqrt(uV/dt)).to_dict() }   )
+        dt = 1
+        u = np.log(self.datos).diff()
+        uM = u.mean()
+        uV = u.std()**2
+        
+        return( {"mMME" : ((uM + uV/2)/dt), "sMME" : (np.sqrt(uV/dt)) }   )
 
-    def estimacionMV(datos = self.datos):
+    def estimacionMV(self):
         """
         La siguiente función nos devuelve mu y sigma obtenidos por el método de máxima verosimilitud,
         Este método se basa en maximizar la función de verosimilitud.
@@ -100,23 +93,16 @@ class LogNormal():
         Output:
             - Dict[Number]          : Diccionario con los datos de la media y la desviación típica que nos da el método.
         """
-        n = len(datos)
-        try:
-            dt = (datos.index[1] - datos.index[0]).days
+        n = len(self.datos)
+    
+        dt = 1
 
-            muE = (1/(n*dt))*np.sum((datos/datos.shift()) -1)
-            siE = np.sqrt((1/(n*dt))*np.sum(((datos/datos.shift()) -1- muE*dt)**2 ))
-            
-            return( {"m" : muE.to_dict()  ,"s" : siE.to_dict()})
-        except:
-            dt = 1
+        muE = (1/(n*dt))*np.sum((self.datos/self.datos.shift()) -1)
+        siE = np.sqrt((1/(n*dt))*np.sum(((self.datos/self.datos.shift()) -1- muE*dt)**2 ))
+        
+        return( {"muE" : muE  ,"siE" : siE})
 
-            muE = (1/(n*dt))*np.sum((datos/datos.shift()) -1)
-            siE = np.sqrt((1/(n*dt))*np.sum(((datos/datos.shift()) -1- muE*dt)**2 ))
-            
-            return( {"m" : muE.to_dict()  ,"s" : siE.to_dict()})
-
-    def estimacionMNP(datos = self.datos):
+    def estimacionMNP(self):
         """
         La siguiente función nos devuelve mu y sigma obtenidos por el método de momentos no paramétrico.
         Input:
@@ -124,23 +110,17 @@ class LogNormal():
         Output:
             - Dict[Number]          : Diccionario con los datos de la media y la desviación típica que nos da el método.
         """
-        n = len(datos)
+        n = len(self.datos)
         
-        try:
-            dt = (datos.index[1] - datos.index[0]).days
-            muE = (1/(dt))*(np.sum(datos.diff())/np.sum(datos[0:(n-1)]))
-            siE = np.sqrt((1/(dt))*(np.sum((datos.diff())**2)/np.sum((datos[0:(n-1)])**2)))
-            
-            return( {"m" : muE.to_dict()  ,"s" : siE.to_dict()})
-        except:
-            dt = 1
+        
+        dt = 1
 
-            muE = (1/(dt))*(np.sum(datos.diff())/np.sum(datos[0:(n-1)]))
-            siE = np.sqrt((1/(dt))*(np.sum((datos.diff())**2)/np.sum((datos[0:(n-1)])**2)))
-            
-            return( {"m" : muE.to_dict()  ,"s" : siE.to_dict()})
+        muE = (1/(dt))*(np.sum(self.datos.diff())/np.sum(self.datos[0:(n-1)]))
+        siE = np.sqrt((1/(dt))*(np.sum((self.datos.diff())**2)/np.sum((self.datos[0:(n-1)])**2)))
+        
+        return( {"muMnp" : muE ,"siMnp" : siE})
 
-    def errores(datos, modelo):
+    def errores(self, modelo):
         """
         La siguiente función nos devuelve los erroes cuadrático medio y absoluto porcentual del modelo ajustado.
         Input:
@@ -149,10 +129,10 @@ class LogNormal():
         Output:
             - Dict                  : Diccionario que nos devuelve los valores de error.
         """
-        d = np.log(datos.iloc[0])
+        d = np.log(self.datos.iloc[0])
         m = np.log(modelo)
 
-        n = len(datos)
+        n = len(self.datos)
 
         ecm = np.sqrt((1/n)*(np.sum( (d-m)**2 )) )
 
@@ -160,7 +140,7 @@ class LogNormal():
 
         return({"ECM": ecm.to_dict() , "MAPE" : mape.to_dict()})
 
-    def validacion(estimacion, datos):
+    def validacion(self,estimacion):
         """
         La siguiente función nos devuleve los errores cometidos al utilizar cierto estimador. Se complementa con la función error.
         Input:
@@ -169,14 +149,13 @@ class LogNormal():
         Output:
             - Dict                  : Diccionario que nos devuelve los valores de error.
         """
-        mu = [estimacion[k] for k in estimacion.keys() if k in ("mMME","muE","muE")][0]
-        sigma = [estimacion[k] for k in estimacion.keys() if k not in ("mMME","muE","muE")][0]
+        mu = [estimacion[k] for k in estimacion.keys() if k in ("mMME","muE","muMnp")][0]
+        sigma = [estimacion[k] for k in estimacion.keys() if k not in ("mMME","muE","muMnp")][0]
+        mm = self.media(mu)
 
-        mm = media(datos,mu)
+        return(self.errores(mm))
 
-        return(errores(datos, mm))
-
-    def predecir(datos, est, t):
+    def predecir(self, est, t):
         """
         La siguiente función nos devuleve la tabla con los valores obtenidos en nuestro modelo. Además contiene la prediccion en las ultimas t filas.
         Input:
@@ -189,28 +168,26 @@ class LogNormal():
         mu = [est[k] for k in est.keys() if k in ("mMME","muE","muE")][0]
         sigma = [est[k] for k in est.keys() if k not in ("mMME","muE","muE")][0]
 
-        val = validacion(est, datos)
+        val = self.validacion(est)
 
-        muP = media(datos,mu)
+        muP = self.media(mu)
         for i in range(0,t):
-            muP = muP.append(media(datos,mu,len(datos)+i),ignore_index=True)
+            muP = muP.append(self.media(mu,len(self.datos)+i),ignore_index=True)
 
         self.muP = muP
-        sigmaP = desvTipica(datos,mu, sigma)
 
+        sigmaP = self.desvTipica(mu, sigma)
         for i in range(0,t):
-            sigmaP = sigmaP.append(desvTipica(datos,mu,sigma,len(datos)+i),ignore_index=True)
+            sigmaP = sigmaP.append(self.desvTipica(mu,sigma,len(self.datos)+i),ignore_index=True)
 
         self.sigmaP = sigmaP
 
-        self.p25 = pd.DataFrame(np.array(muP)-1.96*np.array(sigmaP), columns = datos.columns)
-        self.p975 = pd.DataFrame(np.array(muP) + 1.96*np.array(sigmaP), columns = datos.columns)
-
-
+        self.p25 = pd.DataFrame(np.array(muP)-1.96*np.array(sigmaP), columns = self.datos.columns)
+        self.p975 = pd.DataFrame(np.array(muP) + 1.96*np.array(sigmaP), columns = self.datos.columns)
         print( f"ECM -> {val['ECM']}\n- - - - - - - \nMAPE -> {val['MAPE']}%")
 
 
-    def graficar(datos, est, t):
+    def graficar(self,est, t):
         """
         La siguiente función nos grafica los resultados del modelo
         Input:
@@ -220,15 +197,15 @@ class LogNormal():
         Output:
             - Información del modelo + Gráficos
         """
-        p25,muP,p975,sigmaP = predecir(datos, est, t)
+        self.predecir(est, t)
 
-        for col in datos.columns:
+        for col in self.datos.columns:
             fig,(ax1,ax2) = plt.subplots(1,2,figsize = (10,4))
-            ax1.plot(datos[col], label = "Datos", color = 'green')
-            ax1.plot(p25[col], label = "IC 95% Inf", color = 'tomato')
-            ax1.plot(muP[col], label = "Media", color = 'red' ,linestyle= 'dashed')
-            ax1.plot(p975[col], label = "IC 95% Sup", color = 'coral')
-            ax1.axvline(x = len(datos)-1 , color = 'black') 
+            ax1.plot(self.datos[col], label = "Datos", color = 'green')
+            ax1.plot(self.p25[col], label = "IC 95% Inf", color = 'tomato')
+            ax1.plot(self.muP[col], label = "Media", color = 'red' ,linestyle= 'dashed')
+            ax1.plot(self.p975[col], label = "IC 95% Sup", color = 'coral')
+            ax1.axvline(x = len(self.datos)-1 , color = 'black') 
             ax1.legend()
 
             ax1.set_ylabel("Price")
@@ -237,9 +214,9 @@ class LogNormal():
             ax1.set_title("Datos vs Modelo")
 
 
-            ax2.plot(muP[col].cumsum(), label = "Media", color = 'red' ,linestyle= 'dashed')
-            ax2.plot(datos[col].cumsum(), label = "Datos", color = 'green')
-            ax2.axvline(x = len(datos)-1 , color = 'black') 
+            ax2.plot(self.muP[col].cumsum(), label = "Media", color = 'red' ,linestyle= 'dashed')
+            ax2.plot(self.datos[col].cumsum(), label = "Datos", color = 'green')
+            ax2.axvline(x = len(self.datos)-1 , color = 'black') 
 
             ax2.set_ylabel("Cumulative price")
             ax2.set_xlabel("t")
@@ -250,10 +227,10 @@ class LogNormal():
 
             plt.show()
 
-    def tableE(datos = self.datos, em = self.em, emv = self.emv , emnp = self.emnp):
+    def tableE(self):
 
-        valMom = pd.DataFrame(validacion(em, datos))
-        valMV = pd.DataFrame(validacion(emv, datos))
-        valMNP = pd.DataFrame(validacion(emnp, datos))
+        valMom = pd.DataFrame(self.validacion(self.em))
+        valMV = pd.DataFrame(self.validacion(self.emv))
+        valMNP = pd.DataFrame(self.validacion(self.emnp))
 
         return pd.concat([valMom, valMV,valMNP], keys=['M', 'Mv','MNP'])
